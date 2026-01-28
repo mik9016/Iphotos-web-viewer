@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { X, ChevronLeft, ChevronRight, Download, MapPin, Calendar, Info } from 'lucide-vue-next'
+import { X, ChevronLeft, ChevronRight, Download, MapPin, Calendar, Info, Trash2 } from 'lucide-vue-next'
 import { usePhotosStore } from '@/stores/photos'
 import { useGeocoding } from '@/composables/useGeocoding'
 import VideoPlayer from './VideoPlayer.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { formatDateTime } from '@/utils/date'
 import { downloadSinglePhoto, formatFileSize } from '@/utils/download'
 import type { PhotoWithUrl } from '@/types'
@@ -26,6 +27,8 @@ const imageLoaded = ref(false)
 const showInfo = ref(false)
 const locationName = ref<string | null>(null)
 const downloading = ref(false)
+const showDeleteConfirm = ref(false)
+const deleting = ref(false)
 
 const isVideo = computed(() => props.photo.media_type === 'video')
 
@@ -64,6 +67,19 @@ async function handleDownload() {
   }
 }
 
+async function handleDelete() {
+  deleting.value = true
+  try {
+    const success = await photosStore.deletePhoto(props.photo)
+    if (success) {
+      emit('close')
+    }
+  } finally {
+    deleting.value = false
+    showDeleteConfirm.value = false
+  }
+}
+
 watch(() => props.photo, async (newPhoto) => {
   imageLoaded.value = false
   locationName.value = await getLocationName(newPhoto)
@@ -97,6 +113,14 @@ onUnmounted(() => {
       :class="{ 'bg-white/30': showInfo }"
     >
       <Info class="w-6 h-6" />
+    </button>
+
+    <!-- Delete button -->
+    <button
+      @click="showDeleteConfirm = true"
+      class="absolute top-4 right-40 z-10 p-2 rounded-full bg-white/10 hover:bg-white/20 hover:bg-red-500/50 text-white transition-colors"
+    >
+      <Trash2 class="w-6 h-6" />
     </button>
 
     <!-- Download button -->
@@ -210,5 +234,17 @@ onUnmounted(() => {
     <div class="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-white/10 text-white text-sm">
       {{ currentIndex + 1 }} / {{ photosStore.photos.length }}
     </div>
+
+    <!-- Delete confirmation -->
+    <ConfirmDialog
+      v-if="showDeleteConfirm"
+      title="Delete Photo"
+      :message="`Are you sure you want to delete '${photo.filename}'? This action cannot be undone.`"
+      confirm-text="Delete"
+      variant="danger"
+      :loading="deleting"
+      @confirm="handleDelete"
+      @cancel="showDeleteConfirm = false"
+    />
   </div>
 </template>

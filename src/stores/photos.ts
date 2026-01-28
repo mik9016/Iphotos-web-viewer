@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useSupabase } from '@/composables/useSupabase'
 import { usePhotoUrl } from '@/composables/usePhotoUrl'
+import { deleteSinglePhoto, deleteMultiplePhotos, type DeleteResult } from '@/utils/delete'
 import type { Photo, PhotoWithUrl, FilterState, Folder } from '@/types'
 
 const PAGE_SIZE = 50
@@ -20,6 +21,8 @@ export const usePhotosStore = defineStore('photos', () => {
   const filters = ref<FilterState>({})
   const sortBy = ref<'taken_at' | 'created_at'>('taken_at')
   const sortOrder = ref<'asc' | 'desc'>('desc')
+  const deleting = ref(false)
+  const deleteProgress = ref({ current: 0, total: 0, failed: 0 })
 
   const filteredPhotos = computed(() => {
     return photos.value
@@ -239,6 +242,49 @@ export const usePhotosStore = defineStore('photos', () => {
     error.value = null
   }
 
+  async function deletePhoto(photo: PhotoWithUrl): Promise<boolean> {
+    deleting.value = true
+    try {
+      await deleteSinglePhoto(photo)
+      // Remove from local state
+      photos.value = photos.value.filter(p => p.id !== photo.id)
+      selectedPhotos.value.delete(photo.id)
+      return true
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to delete photo'
+      return false
+    } finally {
+      deleting.value = false
+    }
+  }
+
+  async function deleteSelectedPhotos(): Promise<DeleteResult> {
+    deleting.value = true
+    deleteProgress.value = { current: 0, total: selectedPhotos.value.size, failed: 0 }
+
+    const photosToDelete = getSelectedPhotos()
+
+    try {
+      const result = await deleteMultiplePhotos(photosToDelete, (current, total, failed) => {
+        deleteProgress.value = { current, total, failed }
+      })
+
+      // Remove succeeded photos from local state
+      const succeededSet = new Set(result.succeeded)
+      photos.value = photos.value.filter(p => !succeededSet.has(p.id))
+      result.succeeded.forEach(id => selectedPhotos.value.delete(id))
+
+      if (result.failed.length > 0) {
+        error.value = `Failed to delete ${result.failed.length} photo(s)`
+      }
+
+      return result
+    } finally {
+      deleting.value = false
+      deleteProgress.value = { current: 0, total: 0, failed: 0 }
+    }
+  }
+
   return {
     photos,
     filteredPhotos,
@@ -264,5 +310,9 @@ export const usePhotosStore = defineStore('photos', () => {
     getFolders,
     getSelectedPhotos,
     clearError,
+    deleting,
+    deleteProgress,
+    deletePhoto,
+    deleteSelectedPhotos,
   }
 })
