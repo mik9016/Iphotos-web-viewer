@@ -40,17 +40,24 @@ const hasPrev = computed(() => currentIndex.value > 0)
 const hasNext = computed(() => currentIndex.value < photosStore.photos.length - 1)
 
 function handleKeydown(e: KeyboardEvent) {
+  // Don't handle if delete confirm is open
+  if (showDeleteConfirm.value) return
+
   switch (e.key) {
     case 'Escape':
+      e.preventDefault()
       emit('close')
       break
     case 'ArrowLeft':
+      e.preventDefault()
       if (hasPrev.value) emit('prev')
       break
     case 'ArrowRight':
+      e.preventDefault()
       if (hasNext.value) emit('next')
       break
     case 'i':
+      e.preventDefault()
       showInfo.value = !showInfo.value
       break
   }
