@@ -57,6 +57,9 @@ function togglePlay() {
   } else {
     videoRef.value.play()
   }
+
+  // Remove focus from video to allow parent keyboard navigation
+  videoRef.value.blur()
 }
 
 function toggleMute() {
@@ -106,6 +109,18 @@ onMounted(() => {
   loadVideoUrl()
 })
 
+// Reload video when photo changes
+watch(() => props.photo.id, () => {
+  // Reset state
+  isPlaying.value = false
+  currentTime.value = 0
+  duration.value = 0
+  videoError.value = false
+
+  // Load new video URL
+  loadVideoUrl()
+}, { immediate: false })
+
 watch(videoRef, (video) => {
   if (video) {
     video.addEventListener('play', () => { isPlaying.value = true })
@@ -145,8 +160,8 @@ watch(videoRef, (video) => {
       @timeupdate="handleTimeUpdate"
       @loadedmetadata="handleLoadedMetadata"
       @error="handleVideoError"
-      @keydown.left.prevent
-      @keydown.right.prevent
+      @focus="($event.target as HTMLVideoElement).blur()"
+      @keydown.stop.prevent
     />
 
     <!-- Play overlay -->
